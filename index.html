@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Eye Laser AR</title>
+
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: black;
+}
+
+video, canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  object-fit: cover;
+}
+
+#captureBtn {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 20px;
+  font-size: 18px;
+  border: none;
+  border-radius: 30px;
+  background: red;
+  color: white;
+  z-index: 10;
+}
+</style>
+</head>
+
+<body>
+
+<video id="video" autoplay playsinline muted></video>
+<canvas id="canvas"></canvas>
+<button id="captureBtn">📸 Capture</button>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/face_mesh.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3/camera_utils.js"></script>
+
+<script>
+const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const captureBtn = document.getElementById("captureBtn");
+
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+let latestLandmarks = null;
+
+const faceMesh = new FaceMesh({
+  locateFile: (file) =>
+    `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4/${file}`
+});
+
+faceMesh.setOptions({
+  maxNumFaces: 1,
+  refineLandmarks: true,
+  minDetectionConfidence: 0.6,
+  minTrackingConfidence: 0.6
+});
+
+faceMesh.onResults(results => {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+
+  if (!results.multiFaceLandmarks) return;
+
+  latestLandmarks = results.multiFaceLandmarks[0];
+
+  const leftEye = latestLandmarks[33];
+  const rightEye = latestLandmarks[263];
+
+  drawLaser(leftEye);
+  drawLaser(rightEye);
+});
+
+const camera = new Camera(video, {
+  onFrame: async () => {
+    await faceMesh.send({ image: video });
+  },
+  width: 1280,
+  height: 720
+});
+camera.start();
+
+function drawLaser(eye) {
+  const x = eye.x * canvas.width;
+  const y = eye.y * canvas.height;
+
+  const length = 1200;
+  const jitter = (Math.random() - 0.5) * 0.05;
+
+  ctx.strokeStyle = "red";
+  ctx.lineWidth = 5;
+  ctx.shadowBlur = 30;
+  ctx.shadowColor = "red";
+
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(
+    x + length * Math.cos(jitter),
+    y + length * Math.sin(jitter)
+  );
+  ctx.stroke();
+}
+
+/* 📸 CAPTURE WITHOUT BUTTON */
+captureBtn.onclick = () => {
+  captureBtn.style.display = "none";
+
+  setTimeout(() => {
+    const link = document.createElement("a");
+    link.download = "eye-laser.png";
+    link.href = canvas.toDataURL("image/png");
+    link.click();
+
+    captureBtn.style.display = "block";
+  }, 50);
+};
+</script>
+
+</body>
+</html>
